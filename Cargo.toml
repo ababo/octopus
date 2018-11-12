@@ -1,0 +1,6 @@
+[package]
+name = "octopus"
+version = "0.1.0"
+authors = ["Simon Prykhodko <semion.ababo@gmail.com>"]
+
+[dependencies]
