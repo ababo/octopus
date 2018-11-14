@@ -1,7 +1,13 @@
 #![no_std]
 #![no_main]
+#![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(linkage)]
+
+#[cfg(target_arch = "x86_64")]
+global_asm!(include_str!("start.x86_64.s"));
+
+mod multiboot;
 
 use core::panic::PanicInfo;
 
@@ -25,8 +31,3 @@ pub extern "C" fn eh_personality() {
 pub extern "C" fn _Unwind_Resume() {
     loop {}
 }
-
-#[used]
-#[linkage = "external"]
-#[link_section = ".header"]
-static HEADER: &[u8] = b"Some data I want to expose in the binary image";
