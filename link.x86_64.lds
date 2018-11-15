@@ -3,11 +3,11 @@ OUTPUT_FORMAT(elf32-i386)
 ENTRY(_start)
 
 SECTIONS {
-    . = 1M;
-
     .header : {
         *(.header);
     }
+
+    . = 0x500;
 
     .text : {
         *(.text .text.*);
@@ -23,6 +23,14 @@ SECTIONS {
 
     .bss : {
         *(.bss);
+    }
+
+    .rela.plt : {
+        *(.rela.plt);
+    }
+
+    .shstrtab : {
+        *(.shstrtab);
     }
 
     /DISCARD/ : {

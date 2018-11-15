@@ -34,7 +34,7 @@ static MULTIBOOT_HEADER: Header = Header {
     checksum: (-((HEADER_MAGIC + HEADER_FLAGS) as i32) as u32),
     header_addr: 0,
     load_addr: 0,
-    load_end_addr: 0, //
+    load_end_addr: 0,
     bss_end_addr: 0,
     entry_addr: 0,
     mode_type: 0,

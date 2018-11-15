@@ -11,6 +11,7 @@
     "panic-strategy": "abort",
     "pre-link-args": {
         "ld.lld": [
+            "-zmax-page-size=1",
             "--script=link.x86_64.lds"
         ]
     },

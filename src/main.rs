@@ -1,5 +1,5 @@
-#![no_std]
 #![no_main]
+#![no_std]
 #![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(linkage)]
