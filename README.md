@@ -1,5 +1,6 @@
 # Octopus Operating System
 
+
 ## How to build
 
 ### Prerequisites
@@ -25,3 +26,12 @@
     export RUSTFLAGS="-Clinker=/usr/local/bin/$ARCH-elf-ld -Clink-arg=--script=link.$ARCH.lds -Clink-arg=-zmax-page-size=1"
     cargo xbuild --target $ARCH-octopus.json --release
     ```
+
+
+## How to test
+
+The build produces multiboot-compatible kernel image which can be booted via GRUB. You can also use QEMU emulator to test it:
+
+```sh
+qemu-system-$ARCH -nographic -kernel target/$ARCH-octopus/release/octopus
+```
