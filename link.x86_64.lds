@@ -3,11 +3,11 @@ OUTPUT_FORMAT(elf32-i386)
 ENTRY(_start)
 
 SECTIONS {
+    . = 0x500;
+
     .header : {
         *(.header);
     }
-
-    . = 0x500;
 
     .text : {
         *(.text .text.*);

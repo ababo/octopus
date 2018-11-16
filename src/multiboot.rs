@@ -28,7 +28,7 @@ const HEADER_FLAGS: u32 = HEADER_MEMORY_INFO;
 
 #[linkage = "external"]
 #[link_section = ".header"]
-static MULTIBOOT_HEADER: Header = Header {
+static HEADER: Header = Header {
     magic: HEADER_MAGIC,
     flags: HEADER_FLAGS,
     checksum: (-((HEADER_MAGIC + HEADER_FLAGS) as i32) as u32),
