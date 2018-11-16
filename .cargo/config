@@ -1,0 +1,13 @@
+# For host OSs other than $TARGET_ARCH-unknown-linux-gnu please install GNU
+# binutils for $TARGET_ARCH-elf and uncomment the following target-specific
+# sections.
+
+#[target.x86_64-octopus]
+#rustflags = [
+#    "-Clinker=x86_64-elf-ld"
+#]
+
+#[target.aarch64-octopus]
+#rustflags = [
+#    "-Clinker=aarch64-elf-ld"
+#]
