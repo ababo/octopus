@@ -2,7 +2,7 @@
 const HEADER_MAGIC: u32 = 0x1BADB002;
 
 // Must pass memory information to OS.
-const HEADER_MEMORY_INFO: u32 = 0x00000002;
+const HEADER_MEMORY_INFO: u32 = 0x2;
 
 #[repr(C)]
 struct Header {
@@ -26,8 +26,8 @@ struct Header {
 
 const HEADER_FLAGS: u32 = HEADER_MEMORY_INFO;
 
-#[linkage = "external"]
 #[link_section = ".header"]
+#[linkage = "external"]
 static HEADER: Header = Header {
     magic: HEADER_MAGIC,
     flags: HEADER_FLAGS,

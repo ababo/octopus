@@ -22,15 +22,7 @@ SECTIONS {
     }
 
     .bss : {
-        *(.bss);
-    }
-
-    .rela.plt : {
-        *(.rela.plt);
-    }
-
-    .shstrtab : {
-        *(.shstrtab);
+        *(.bss .bss.*);
     }
 
     /DISCARD/ : {
