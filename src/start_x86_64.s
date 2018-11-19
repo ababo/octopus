@@ -64,12 +64,4 @@ start64:
     shrq $32, %rsi
 
     /* Call the Rust entry point. */
-    call _init
-
-movw 0x400, %dx
-movb $'H', %al
-outb %al, %dx
-h:
-hlt
-jmp h
-
+    call _boot
