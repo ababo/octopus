@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_macros)]
 use core::fmt;
 
 #[derive(PartialEq, PartialOrd)]
@@ -52,6 +54,10 @@ pub fn log(level: Level, args: fmt::Arguments) {
         writer.write_str(prefix).unwrap();
         writer.write_fmt(args).unwrap();
         writer.write_str("\n").unwrap();
+    }
+
+    if level == Level::Fatal {
+        panic!("fatal event logged")
     }
 }
 
