@@ -1,10 +1,13 @@
 #![cfg_attr(not(test), no_main)]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![feature(asm)]
 #![feature(const_slice_len)]
 #![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(linkage)]
+
+#[cfg(test)]
+extern crate core;
 
 #[cfg(not(test))]
 #[cfg(target_arch = "x86_64")]
