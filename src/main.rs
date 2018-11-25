@@ -19,4 +19,5 @@ mod log;
 mod boot;
 mod config;
 mod detect;
+mod device_tree;
 mod mem;
