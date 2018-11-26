@@ -1,5 +1,6 @@
 use core::mem::size_of;
 use core::slice::from_raw_parts;
+use core::str::{from_utf8, Utf8Error};
 
 use super::*;
 
@@ -16,6 +17,8 @@ pub enum Error {
     UnalignedStruct,
     OverlappingStruct,
     OverlappingStrings,
+    BadNodeName,
+    BadStrEncoding(Utf8Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -23,14 +26,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct DtbNode<'a> {
     pub name: &'a str,
-    pub addr: usize,
     offset: usize,
 }
 
 #[derive(Debug)]
 pub struct DtbReader<'a> {
     reserved_mem: &'a [ReservedMemEntry],
-    struct_block: &'a [u32],
+    struct_block: &'a [u8],
     strings_block: &'a [u8],
 }
 
@@ -110,8 +112,8 @@ fn get_reserved_mem<'a>(
 fn get_struct_block<'a>(
     blob: &'a [u8],
     header: &DtbHeader,
-) -> Result<&'a [u32]> {
-    if header.struct_offset % 4 != 0 {
+) -> Result<&'a [u8]> {
+    if header.struct_offset % 4 != 0 || header.struct_size % 4 != 0 {
         return Err(Error::UnalignedStruct);
     }
 
@@ -120,13 +122,7 @@ fn get_struct_block<'a>(
     }
 
     let offset = header.struct_offset as usize;
-    let struct_block = &blob[offset..offset + header.struct_size as usize];
-    Ok(unsafe {
-        from_raw_parts(
-            struct_block.as_ptr() as *const u32,
-            struct_block.len() / 4,
-        )
-    })
+    Ok(&blob[offset..offset + header.struct_size as usize])
 }
 
 fn get_strings_block<'a>(
@@ -139,6 +135,21 @@ fn get_strings_block<'a>(
 
     let offset = header.strings_offset as usize;
     Ok(&blob[offset..offset + header.strings_size as usize])
+}
+
+fn read_node<'a>(struct_block: &'a [u8], offset: usize) -> Result<DtbNode<'a>> {
+    for (i, chr) in (&struct_block[offset..]).iter().enumerate() {
+        if *chr == 0 {
+            return match from_utf8(&struct_block[offset..i]) {
+                Ok(name) => Ok(DtbNode::<'a> {
+                    name: name,
+                    offset: ((i + 4 - 1) / 4) * 4,
+                }),
+                Err(err) => Err(Error::BadStrEncoding(err)),
+            };
+        }
+    }
+    Err(Error::BadNodeName)
 }
 
 impl<'a> DtbReader<'a> {
@@ -199,6 +210,7 @@ mod tests {
     test_error!(test_overlapping_reserved_mem, OverlappingReservedMem);
     test_error!(test_no_zero_reserved_mem_entry, NoZeroReservedMemEntry);
     test_error!(test_unaligned_struct, UnalignedStruct);
+    test_error!(test_unaligned_struct2, UnalignedStruct);
     test_error!(test_overlapping_struct, OverlappingStruct);
     test_error!(test_overlapping_strings, OverlappingStrings);
 }
