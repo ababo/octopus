@@ -24,9 +24,32 @@ pub enum Error {
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug)]
-pub struct DtbNode<'a> {
-    pub name: &'a str,
+pub enum DtbStructItem<'a> {
+    Node { name: &'a str },
+    Property { name: &'a str, value: &'a [u8] },
+}
+
+pub struct DtbStructIterator<'a> {
+    struct_block: &'a [u8],
+    strings_block: &'a [u8],
     offset: usize,
+}
+
+impl<'a> DtbStructIterator<'a> {
+    fn next(&mut self) -> Option<DtbStructItem<'a>> {
+        None
+    }
+}
+
+impl<'a> Iterator for DtbStructIterator<'a> {
+    type Item = DtbStructItem<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next() {
+            Some(item) => Some(item),
+            None => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -137,21 +160,6 @@ fn get_strings_block<'a>(
     Ok(&blob[offset..offset + header.strings_size as usize])
 }
 
-fn read_node<'a>(struct_block: &'a [u8], offset: usize) -> Result<DtbNode<'a>> {
-    for (i, chr) in (&struct_block[offset..]).iter().enumerate() {
-        if *chr == 0 {
-            return match from_utf8(&struct_block[offset..i]) {
-                Ok(name) => Ok(DtbNode::<'a> {
-                    name: name,
-                    offset: ((i + 4 - 1) / 4) * 4,
-                }),
-                Err(err) => Err(Error::BadStrEncoding(err)),
-            };
-        }
-    }
-    Err(Error::BadNodeName)
-}
-
 impl<'a> DtbReader<'a> {
     pub fn new(blob: &'a [u8]) -> Result<Self> {
         let header = get_header(blob)?;
@@ -162,12 +170,12 @@ impl<'a> DtbReader<'a> {
         })
     }
 
-    pub fn find_node(parent: &DtbNode<'a>, path: &str) -> Result<DtbNode<'a>> {
-        Err(Error::BadMagic)
-    }
-
-    pub fn find_str_prop(parent: &DtbNode<'a>, path: &str) -> Result<&'a str> {
-        Err(Error::BadMagic)
+    pub fn struct_iter(&self) -> DtbStructIterator<'a> {
+        DtbStructIterator::<'a> {
+            struct_block: self.struct_block,
+            strings_block: self.strings_block,
+            offset: 0,
+        }
     }
 }
 
