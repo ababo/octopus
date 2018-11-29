@@ -3,7 +3,7 @@ const DTB_COMP_VERSION: u32 = 16;
 
 const DTB_BEGIN_NODE: u32 = 1;
 const DTB_END_NODE: u32 = 2;
-const DTB_PROP: u32 = 3;
+const DTB_PROPERTY: u32 = 3;
 const DTB_NOP: u32 = 4;
 const DTB_END: u32 = 9;
 
@@ -24,8 +24,14 @@ struct DtbHeader {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ReservedMemEntry {
-    pub addr: u64,
+    pub address: u64,
     pub size: u64,
+}
+
+#[repr(C)]
+pub struct DtbPropertyDesc {
+    pub value_length: u32,
+    pub name_offset: u32,
 }
 
 pub mod dtb_reader;

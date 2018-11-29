@@ -17,6 +17,9 @@ pub enum Error {
     UnalignedStruct,
     OverlappingStruct,
     OverlappingStrings,
+    UnexpectedEndOfStruct,
+    NoMoreStructItems,
+    BadStructToken,
     BadNodeName,
     BadStrEncoding(Utf8Error),
 }
@@ -25,8 +28,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum DtbStructItem<'a> {
-    Node { name: &'a str },
+    BeginNode { name: &'a str },
     Property { name: &'a str, value: &'a [u8] },
+    EndNode,
 }
 
 pub struct DtbStructIterator<'a> {
@@ -36,8 +40,70 @@ pub struct DtbStructIterator<'a> {
 }
 
 impl<'a> DtbStructIterator<'a> {
-    fn next(&mut self) -> Option<DtbStructItem<'a>> {
-        None
+    fn read_node(&mut self) -> Result<DtbStructItem<'a>> {
+        for (i, chr) in (&self.struct_block[self.offset..]).iter().enumerate() {
+            if *chr == 0 {
+                self.offset += ((i + 4 - 1) / 4) * 4;
+                return match from_utf8(&self.struct_block[self.offset..i]) {
+                    Ok(name) => Ok(DtbStructItem::BeginNode { name: name }),
+                    Err(err) => Err(Error::BadStrEncoding(err)),
+                };
+            }
+        }
+        Err(Error::BadNodeName)
+    }
+
+    fn assert_enough_struct(&self, size: usize) -> Result<()> {
+        if self.struct_block.len() < size + self.offset {
+            Err(Error::UnexpectedEndOfStruct)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn read_property(&mut self) -> Result<DtbStructItem<'a>> {
+        self.assert_enough_struct(size_of::<DtbPropertyDesc>())?;
+
+        let desc_be = unsafe {
+            &*((&self.strings_block[self.offset..]).as_ptr()
+                as *const DtbPropertyDesc) as &DtbPropertyDesc
+        };
+
+        Err(Error::BadNodeName)
+    }
+
+    pub fn next(&mut self) -> Result<DtbStructItem<'a>> {
+        while true {
+            self.assert_enough_struct(4)?;
+
+            let token = u32::from_be(unsafe {
+                *((&self.strings_block[self.offset..]).as_ptr() as *const u32)
+            });
+
+            if token == DTB_NOP {
+                self.offset += 4;
+                continue;
+            }
+
+            return match token {
+                DTB_BEGIN_NODE => {
+                    self.offset += 4;
+                    self.read_node()
+                }
+                DTB_PROPERTY => {
+                    self.offset += 4;
+                    self.read_property()
+                }
+                DTB_END_NODE => {
+                    self.offset += 4;
+                    Ok(DtbStructItem::EndNode)
+                }
+                DTB_END => Err(Error::NoMoreStructItems),
+                _ => Err(Error::BadStructToken),
+            };
+        }
+
+        unreachable!()
     }
 }
 
@@ -46,8 +112,8 @@ impl<'a> Iterator for DtbStructIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.next() {
-            Some(item) => Some(item),
-            None => None,
+            Ok(item) => Some(item),
+            Err(_) => None,
         }
     }
 }
@@ -65,7 +131,7 @@ fn get_header<'a>(blob: &'a [u8]) -> Result<DtbHeader> {
     }
 
     let be_header =
-        unsafe { &*(&blob[0] as *const u8 as *const DtbHeader) as &DtbHeader };
+        unsafe { &*(blob.as_ptr() as *const DtbHeader) as &DtbHeader };
 
     if u32::from_be(be_header.magic) != DTB_MAGIC {
         return Err(Error::BadMagic);
@@ -124,7 +190,9 @@ fn get_reserved_mem<'a>(
         from_raw_parts(ptr, reserved_max_size / entry_size)
     };
 
-    let index = reserved.iter().position(|ref e| e.addr == 0 && e.size == 0);
+    let index = reserved
+        .iter()
+        .position(|ref e| e.address == 0 && e.size == 0);
     if index.is_none() {
         return Err(Error::NoZeroReservedMemEntry);
     }
