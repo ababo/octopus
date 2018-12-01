@@ -30,7 +30,7 @@ pub struct ReservedMemEntry {
 
 #[repr(C)]
 pub struct DtbPropertyDesc {
-    pub value_length: u32,
+    pub value_size: u32,
     pub name_offset: u32,
 }
 

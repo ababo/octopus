@@ -7,30 +7,109 @@ use super::*;
 #[derive(Debug, PartialEq)]
 pub enum Error {
     BadMagic,
-    UnexpectedEndOfBlob,
-    BadVersion,
-    UnsupportedCompVersion,
-    BadTotalSize,
-    UnalignedReservedMem,
-    OverlappingReservedMem,
-    NoZeroReservedMemEntry,
-    UnalignedStruct,
-    OverlappingStruct,
-    OverlappingStrings,
-    UnexpectedEndOfStruct,
-    NoMoreStructItems,
-    BadStructToken,
     BadNodeName,
+    BadPropertyName,
     BadStrEncoding(Utf8Error),
+    BadStructItemType,
+    BadStructToken,
+    BadTotalSize,
+    BadU32List,
+    BadVersion,
+    BufferTooSmall,
+    NoMoreStructItems,
+    NoZeroReservedMemEntry,
+    OverlappingReservedMem,
+    OverlappingStrings,
+    OverlappingStruct,
+    UnalignedReservedMem,
+    UnalignedStruct,
+    UnexpectedEndOfBlob,
+    UnexpectedEndOfStruct,
+    UnsupportedCompVersion,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum DtbStructItem<'a> {
     BeginNode { name: &'a str },
     Property { name: &'a str, value: &'a [u8] },
     EndNode,
+}
+
+impl<'a> DtbStructItem<'a> {
+    pub fn is_node(&self) -> bool {
+        match self {
+            DtbStructItem::BeginNode { name: _ } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_property(&self) -> bool {
+        match self {
+            DtbStructItem::Property { name: _, value: _ } => true,
+            _ => false,
+        }
+    }
+
+    pub fn name(&self) -> Result<&'a str> {
+        match self {
+            DtbStructItem::BeginNode { name } => Ok(name),
+            DtbStructItem::Property { name, value: _ } => Ok(name),
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
+    pub fn value(&self) -> Result<&'a [u8]> {
+        match self {
+            DtbStructItem::Property { name: _, value } => Ok(value),
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
+    pub fn value_str(&self) -> Result<&'a str> {
+        let value = self.value()?;
+        match from_utf8(&value[..value.len() - 1]) {
+            Ok(value_str) => Ok(value_str),
+            Err(err) => Err(Error::BadStrEncoding(err)),
+        }
+    }
+
+    pub fn value_str_list<'b>(
+        &self,
+        buf: &'b mut [&'a str],
+    ) -> Result<&'b [&'a str]> {
+        let mut i = 0;
+        for part in self.value_str()?.split("\0") {
+            if i >= buf.len() {
+                return Err(Error::BufferTooSmall);
+            }
+            buf[i] = part;
+            i += 1;
+        }
+        Ok(&buf[..i])
+    }
+
+    pub fn value_u32_list<'b>(&self, buf: &'b mut [u32]) -> Result<&'b [u32]> {
+        let value = self.value()?;
+
+        if value.len() % 4 != 0 {
+            return Err(Error::BadU32List);
+        }
+
+        let len = value.len() / 4;
+        if buf.len() < len {
+            return Err(Error::BufferTooSmall);
+        }
+
+        for i in 0..len {
+            buf[i] = u32::from_be(unsafe {
+                *(value.as_ptr().offset(4 * i as isize) as *const u32)
+            });
+        }
+
+        Ok(&buf[..len])
+    }
 }
 
 pub struct DtbStructIterator<'a> {
@@ -39,22 +118,33 @@ pub struct DtbStructIterator<'a> {
     offset: usize,
 }
 
+const DTB_TOKEN_SIZE: usize = 4;
+
 impl<'a> DtbStructIterator<'a> {
+    fn set_offset(&mut self, offset: usize) {
+        self.offset =
+            ((offset + DTB_TOKEN_SIZE - 1) / DTB_TOKEN_SIZE) * DTB_TOKEN_SIZE;
+    }
+
     fn read_node(&mut self) -> Result<DtbStructItem<'a>> {
-        for (i, chr) in (&self.struct_block[self.offset..]).iter().enumerate() {
-            if *chr == 0 {
-                self.offset += ((i + 4 - 1) / 4) * 4;
-                return match from_utf8(&self.struct_block[self.offset..i]) {
-                    Ok(name) => Ok(DtbStructItem::BeginNode { name: name }),
-                    Err(err) => Err(Error::BadStrEncoding(err)),
-                };
+        let offset = self.offset + DTB_TOKEN_SIZE;
+        for (i, chr) in (&self.struct_block[offset..]).iter().enumerate() {
+            if *chr != 0 {
+                continue;
             }
+            return match from_utf8(&self.struct_block[offset..offset + i]) {
+                Ok(name) => {
+                    self.set_offset(offset + i + 1);
+                    Ok(DtbStructItem::BeginNode { name: name })
+                }
+                Err(err) => Err(Error::BadStrEncoding(err)),
+            };
         }
         Err(Error::BadNodeName)
     }
 
-    fn assert_enough_struct(&self, size: usize) -> Result<()> {
-        if self.struct_block.len() < size + self.offset {
+    fn assert_enough_struct(&self, offset: usize, size: usize) -> Result<()> {
+        if self.struct_block.len() < offset + size {
             Err(Error::UnexpectedEndOfStruct)
         } else {
             Ok(())
@@ -62,48 +152,68 @@ impl<'a> DtbStructIterator<'a> {
     }
 
     fn read_property(&mut self) -> Result<DtbStructItem<'a>> {
-        self.assert_enough_struct(size_of::<DtbPropertyDesc>())?;
+        let mut offset = self.offset + DTB_TOKEN_SIZE;
+        let desc_size = size_of::<DtbPropertyDesc>();
+        self.assert_enough_struct(offset, desc_size)?;
 
         let desc_be = unsafe {
-            &*((&self.strings_block[self.offset..]).as_ptr()
+            &*((&self.struct_block[offset..]).as_ptr()
                 as *const DtbPropertyDesc) as &DtbPropertyDesc
         };
+        offset += desc_size;
 
-        Err(Error::BadNodeName)
+        let value_size = u32::from_be(desc_be.value_size) as usize;
+        self.assert_enough_struct(offset, value_size)?;
+        let value = &self.struct_block[offset..offset + value_size];
+        offset += value_size;
+
+        let name_offset = u32::from_be(desc_be.name_offset) as usize;
+        for (i, chr) in (&self.strings_block[name_offset..]).iter().enumerate()
+        {
+            if *chr != 0 {
+                continue;
+            }
+            return match from_utf8(
+                &self.strings_block[name_offset..name_offset + i],
+            ) {
+                Ok(name) => {
+                    self.set_offset(offset);
+                    Ok(DtbStructItem::Property {
+                        name: name,
+                        value: value,
+                    })
+                }
+                Err(err) => Err(Error::BadStrEncoding(err)),
+            };
+        }
+
+        Err(Error::BadPropertyName)
     }
 
     pub fn next(&mut self) -> Result<DtbStructItem<'a>> {
-        while true {
-            self.assert_enough_struct(4)?;
+        loop {
+            self.assert_enough_struct(self.offset, DTB_TOKEN_SIZE)?;
 
             let token = u32::from_be(unsafe {
-                *((&self.strings_block[self.offset..]).as_ptr() as *const u32)
+                *((&self.struct_block[self.offset..]).as_ptr() as *const u32)
             });
 
             if token == DTB_NOP {
-                self.offset += 4;
+                self.offset += DTB_TOKEN_SIZE;
                 continue;
             }
 
             return match token {
-                DTB_BEGIN_NODE => {
-                    self.offset += 4;
-                    self.read_node()
-                }
-                DTB_PROPERTY => {
-                    self.offset += 4;
-                    self.read_property()
-                }
+                DTB_BEGIN_NODE => self.read_node(),
+                DTB_PROPERTY => self.read_property(),
                 DTB_END_NODE => {
-                    self.offset += 4;
+                    self.offset += DTB_TOKEN_SIZE;
                     Ok(DtbStructItem::EndNode)
                 }
                 DTB_END => Err(Error::NoMoreStructItems),
                 _ => Err(Error::BadStructToken),
             };
         }
-
-        unreachable!()
     }
 }
 
@@ -289,4 +399,95 @@ mod tests {
     test_error!(test_unaligned_struct2, UnalignedStruct);
     test_error!(test_overlapping_struct, OverlappingStruct);
     test_error!(test_overlapping_strings, OverlappingStrings);
+
+    fn assert_node<'a>(iter: &mut DtbStructIterator<'a>, name: &str) {
+        let item = iter.next().unwrap();
+        assert!(item.is_node());
+        assert_eq!(item.name().unwrap(), name);
+    }
+
+    fn assert_str_property<'a>(
+        iter: &mut DtbStructIterator<'a>,
+        name: &str,
+        value: &str,
+    ) {
+        let item = iter.next().unwrap();
+        assert!(item.is_property());
+        assert_eq!(item.name().unwrap(), name);
+        assert_eq!(item.value_str().unwrap(), value);
+    }
+
+    fn assert_str_list_property<'a>(
+        iter: &mut DtbStructIterator<'a>,
+        name: &str,
+        value: &[&str],
+    ) {
+        let item = iter.next().unwrap();
+        assert!(item.is_property());
+        assert_eq!(item.name().unwrap(), name);
+        let mut buf = [""; 8];
+        assert_eq!(item.value_str_list(&mut buf).unwrap(), value);
+    }
+
+    fn assert_u32_list_property<'a>(
+        iter: &mut DtbStructIterator<'a>,
+        name: &str,
+        value: &[u32],
+    ) {
+        let item = iter.next().unwrap();
+        assert!(item.is_property());
+        assert_eq!(item.name().unwrap(), name);
+        let mut buf = [0u32; 8];
+        assert_eq!(item.value_u32_list(&mut buf).unwrap(), value);
+    }
+
+    #[test]
+    fn test_struct_enum() {
+        let mut buf = Vec::new();
+        let mut iter = new_reader(&mut buf, "sample").unwrap().struct_iter();
+        assert_node(&mut iter, "");
+        assert_node(&mut iter, "node1");
+        assert_str_property(&mut iter, "a-string-property", "A string");
+        assert_str_list_property(
+            &mut iter,
+            "a-string-list-property",
+            &["first string", "second string"],
+        );
+        assert_eq!(
+            iter.next().unwrap(),
+            DtbStructItem::Property {
+                name: "a-byte-data-property",
+                value: &[0x01, 0x23, 0x34, 0x56],
+            }
+        );
+        assert_node(&mut iter, "child-node1");
+        assert_eq!(
+            iter.next().unwrap(),
+            DtbStructItem::Property {
+                name: "first-child-property",
+                value: &[],
+            }
+        );
+        assert_u32_list_property(&mut iter, "second-child-property", &[1]);
+        assert_str_property(&mut iter, "a-string-property", "Hello, world");
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_node(&mut iter, "child-node2");
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_node(&mut iter, "node2");
+        assert_eq!(
+            iter.next().unwrap(),
+            DtbStructItem::Property {
+                name: "an-empty-property",
+                value: &[],
+            }
+        );
+        assert_u32_list_property(&mut iter, "a-cell-property", &[1, 2, 3, 4]);
+        assert_node(&mut iter, "child-node1");
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_eq!(iter.next().unwrap(), DtbStructItem::EndNode);
+        assert_eq!(iter.next().unwrap_err(), Error::NoMoreStructItems);
+        assert_eq!(iter.next().unwrap_err(), Error::NoMoreStructItems);
+    }
 }
