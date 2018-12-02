@@ -1,0 +1,277 @@
+use core::str::from_utf8;
+
+use super::common::*;
+
+#[derive(Debug, PartialEq)]
+pub enum StructItem<'a> {
+    BeginNode { name: &'a str },
+    Property { name: &'a str, value: &'a [u8] },
+    EndNode,
+}
+
+impl<'a> StructItem<'a> {
+    pub fn is_begin_node(&self) -> bool {
+        match self {
+            StructItem::BeginNode { name: _ } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_property(&self) -> bool {
+        match self {
+            StructItem::Property { name: _, value: _ } => true,
+            _ => false,
+        }
+    }
+
+    pub fn name(&self) -> Result<&'a str> {
+        match self {
+            StructItem::BeginNode { name } => Ok(name),
+            StructItem::Property { name, value: _ } => Ok(name),
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
+    pub fn value(&self) -> Result<&'a [u8]> {
+        match self {
+            StructItem::Property { name: _, value } => Ok(value),
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
+    pub fn value_str(&self) -> Result<&'a str> {
+        let value = self.value()?;
+        let len = value.len();
+        if len == 0 || value[len - 1] != 0 {
+            return Err(Error::BadValueStr);
+        }
+        match from_utf8(&value[..len - 1]) {
+            Ok(value_str) => Ok(value_str),
+            Err(err) => Err(Error::BadStrEncoding(err)),
+        }
+    }
+
+    pub fn value_str_list<'b>(
+        &self,
+        buf: &'b mut [&'a str],
+    ) -> Result<&'b [&'a str]> {
+        let mut i = 0;
+        for part in self.value_str()?.split("\0") {
+            if i >= buf.len() {
+                return Err(Error::BufferTooSmall);
+            }
+            buf[i] = part;
+            i += 1;
+        }
+        Ok(&buf[..i])
+    }
+
+    pub fn value_u32_list<'b>(&self, buf: &'b mut [u32]) -> Result<&'b [u32]> {
+        let value = self.value()?;
+
+        if value.len() % 4 != 0 {
+            return Err(Error::BadU32List);
+        }
+
+        let len = value.len() / 4;
+        if buf.len() < len {
+            return Err(Error::BufferTooSmall);
+        }
+
+        for i in 0..len {
+            buf[i] = u32::from_be(unsafe {
+                *(value.as_ptr().offset(4 * i as isize) as *const u32)
+            });
+        }
+
+        Ok(&buf[..len])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_begin_node() {
+        assert_eq!(StructItem::BeginNode { name: "" }.is_begin_node(), true);
+        assert_eq!(
+            StructItem::Property {
+                name: "",
+                value: &[],
+            }
+            .is_begin_node(),
+            false
+        );
+        assert_eq!(StructItem::EndNode.is_begin_node(), false);
+    }
+
+    #[test]
+    fn test_is_property() {
+        assert_eq!(StructItem::BeginNode { name: "" }.is_property(), false);
+        assert_eq!(
+            StructItem::Property {
+                name: "",
+                value: &[],
+            }
+            .is_property(),
+            true
+        );
+        assert_eq!(StructItem::EndNode.is_property(), false);
+    }
+
+    #[test]
+    fn test_name() {
+        assert_eq!(
+            StructItem::BeginNode { name: "node" }.name().unwrap(),
+            "node"
+        );
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[],
+            }
+            .name()
+            .unwrap(),
+            "property"
+        );
+        assert_eq!(
+            StructItem::EndNode.name().unwrap_err(),
+            Error::BadStructItemType
+        );
+    }
+
+    macro_rules! assert_value {
+        ($method:ident $(, $buf:ident)*) => {
+            assert_eq!(
+                StructItem::BeginNode {name: "node" }
+                .$method($( &mut $buf )*).unwrap_err(),
+                Error::BadStructItemType
+            );
+            assert_eq!(
+                StructItem::EndNode.$method($( &mut $buf )*).unwrap_err(),
+                Error::BadStructItemType
+            );
+        };
+    }
+
+    #[test]
+    fn test_value() {
+        assert_value!(value);
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[1, 2, 3],
+            }
+            .value()
+            .unwrap(),
+            &[1, 2, 3]
+        );
+    }
+
+    macro_rules! assert_value_str {
+        ($method:ident $(, $buf:ident)*) => {
+            assert_value!($method $(, $buf )*);
+            assert_eq!(
+                StructItem::Property {
+                    name: "property",
+                    value: "".as_bytes(),
+                }
+                .$method($( &mut $buf )*)
+                .unwrap_err(),
+                Error::BadValueStr
+            );
+            assert_eq!(
+                StructItem::Property {
+                    name: "property",
+                    value: "value".as_bytes(),
+                }
+                .$method($( &mut $buf )*)
+                .unwrap_err(),
+                Error::BadValueStr
+            );
+        };
+    }
+
+    #[test]
+    fn test_value_str() {
+        assert_value_str!(value_str);
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: "value\0".as_bytes(),
+            }
+            .value_str()
+            .unwrap(),
+            "value"
+        );
+    }
+
+    #[test]
+    fn test_value_str_list() {
+        let mut buf = [""; 2];
+        let mut small_buf = [""; 1];
+        assert_value_str!(value_str_list, buf);
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: "part1\0part2\0".as_bytes(),
+            }
+            .value_str_list(&mut small_buf)
+            .unwrap_err(),
+            Error::BufferTooSmall
+        );
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: "part1\0part2\0".as_bytes(),
+            }
+            .value_str_list(&mut buf)
+            .unwrap(),
+            &["part1", "part2"]
+        );
+    }
+
+    #[test]
+    fn test_value_u32_list() {
+        let mut buf = [0; 3];
+        let mut small_buf = [0; 2];
+        assert_value!(value_u32_list, buf);
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[1, 2, 3],
+            }
+            .value_u32_list(&mut buf)
+            .unwrap_err(),
+            Error::BadU32List
+        );
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[],
+            }
+            .value_u32_list(&mut buf)
+            .unwrap(),
+            &[]
+        );
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3],
+            }
+            .value_u32_list(&mut small_buf)
+            .unwrap_err(),
+            Error::BufferTooSmall
+        );
+        assert_eq!(
+            StructItem::Property {
+                name: "property",
+                value: &[0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3],
+            }
+            .value_u32_list(&mut buf)
+            .unwrap(),
+            &[1, 2, 3]
+        );
+    }
+}
