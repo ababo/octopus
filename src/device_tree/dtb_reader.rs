@@ -22,7 +22,6 @@ impl<'a> DtbStructIterator<'a> {
 
     fn read_begin_node(&mut self) -> Result<StructItem<'a>> {
         let offset = self.offset + DTB_TOKEN_SIZE;
-        println!("{:?}", &self.struct_block[offset..]);
         for (i, chr) in (&self.struct_block[offset..]).iter().enumerate() {
             if *chr != 0 {
                 continue;
@@ -320,7 +319,7 @@ mod tests {
         let item = iter.next().unwrap();
         assert!(item.is_property());
         assert_eq!(item.name().unwrap(), name);
-        let mut buf = [""; 8];
+        let mut buf = [0; size_of::<&str>() * 8];
         assert_eq!(item.value_str_list(&mut buf).unwrap(), value);
     }
 
@@ -332,7 +331,7 @@ mod tests {
         let item = iter.next().unwrap();
         assert!(item.is_property());
         assert_eq!(item.name().unwrap(), name);
-        let mut buf = [0u32; 8];
+        let mut buf = [0; 4 * 8];
         assert_eq!(item.value_u32_list(&mut buf).unwrap(), value);
     }
 

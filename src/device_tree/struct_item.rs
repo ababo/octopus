@@ -1,3 +1,5 @@
+use core::mem::size_of;
+use core::slice::from_raw_parts_mut;
 use core::str::from_utf8;
 
 use super::common::*;
@@ -51,11 +53,21 @@ impl<'a> StructItem<'a> {
         }
     }
 
+    fn transmute_buf<'b, T>(buf: &'b mut [u8]) -> &'b mut [T] {
+        unsafe {
+            from_raw_parts_mut(
+                buf.as_ptr() as *mut T,
+                buf.len() / size_of::<T>(),
+            )
+        }
+    }
+
     pub fn value_str_list<'b>(
         &self,
-        buf: &'b mut [&'a str],
+        buf: &'b mut [u8],
     ) -> Result<&'b [&'a str]> {
         let mut i = 0;
+        let buf = StructItem::transmute_buf(buf);
         for part in self.value_str()?.split("\0") {
             if i >= buf.len() {
                 return Err(Error::BufferTooSmall);
@@ -66,7 +78,7 @@ impl<'a> StructItem<'a> {
         Ok(&buf[..i])
     }
 
-    pub fn value_u32_list<'b>(&self, buf: &'b mut [u32]) -> Result<&'b [u32]> {
+    pub fn value_u32_list<'b>(&self, buf: &'b mut [u8]) -> Result<&'b [u32]> {
         let value = self.value()?;
 
         if value.len() % 4 != 0 {
@@ -74,6 +86,7 @@ impl<'a> StructItem<'a> {
         }
 
         let len = value.len() / 4;
+        let buf = StructItem::transmute_buf(buf);
         if buf.len() < len {
             return Err(Error::BufferTooSmall);
         }
@@ -209,8 +222,8 @@ mod tests {
 
     #[test]
     fn test_value_str_list() {
-        let mut buf = [""; 2];
-        let mut small_buf = [""; 1];
+        let mut buf = [0; size_of::<&str>() * 2];
+        let mut small_buf = [0; size_of::<&str>()];
         assert_value_str!(value_str_list, buf);
         assert_eq!(
             StructItem::Property {
@@ -234,8 +247,8 @@ mod tests {
 
     #[test]
     fn test_value_u32_list() {
-        let mut buf = [0; 3];
-        let mut small_buf = [0; 2];
+        let mut buf = [0; 4 * 3];
+        let mut small_buf = [0; 4 * 2];
         assert_value!(value_u32_list, buf);
         assert_eq!(
             StructItem::Property {
