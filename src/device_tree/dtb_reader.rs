@@ -7,6 +7,30 @@ use super::dtb_format::*;
 use super::struct_item::*;
 
 #[derive(Clone, Debug)]
+pub struct DtbReservedMemIterator<'a> {
+    reserved_mem: &'a [ReservedMemEntry],
+    index: usize,
+}
+
+impl<'a> Iterator for DtbReservedMemIterator<'a> {
+    type Item = ReservedMemEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.reserved_mem.len() {
+            return None;
+        }
+
+        let entry_be = &self.reserved_mem[self.index];
+        self.index += 1;
+
+        Some(ReservedMemEntry {
+            address: u64::from_be(entry_be.address),
+            size: u64::from_be(entry_be.size),
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct DtbStructIterator<'a> {
     struct_block: &'a [u8],
     strings_block: &'a [u8],
@@ -281,6 +305,13 @@ impl<'a> DtbReader<'a> {
         })
     }
 
+    pub fn reserved_mem_iter(&self) -> DtbReservedMemIterator<'a> {
+        DtbReservedMemIterator::<'a> {
+            reserved_mem: self.reserved_mem,
+            index: 0,
+        }
+    }
+
     pub fn struct_iter(&self) -> DtbStructIterator<'a> {
         DtbStructIterator::<'a> {
             struct_block: self.struct_block,
@@ -332,6 +363,23 @@ mod tests {
     test_new_reader!(test_unaligned_struct2, UnalignedStruct);
     test_new_reader!(test_overlapping_struct, OverlappingStruct);
     test_new_reader!(test_overlapping_strings, OverlappingStrings);
+
+    #[test]
+    fn test_reserved_mem() {
+        let mut buf = Vec::new();
+        let mut iter =
+            new_reader(&mut buf, "sample").unwrap().reserved_mem_iter();
+
+        let entry = iter.next().unwrap();
+        assert_eq!(entry.address, 0x12345);
+        assert_eq!(entry.size, 0x23456);
+
+        let entry = iter.next().unwrap();
+        assert_eq!(entry.address, 0x34567);
+        assert_eq!(entry.size, 0x45678);
+
+        assert!(!iter.next().is_some());
+    }
 
     fn assert_node<'a>(iter: &mut DtbStructIterator<'a>, name: &str) {
         let item = iter.next().unwrap();
