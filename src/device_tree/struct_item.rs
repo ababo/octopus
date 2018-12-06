@@ -34,6 +34,29 @@ impl<'a> StructItem<'a> {
         }
     }
 
+    pub fn node_name(&self) -> Result<&'a str> {
+        match self {
+            StructItem::BeginNode { name } => {
+                Ok(name.split("@").next().unwrap())
+            }
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
+    pub fn unit_address(&self) -> Result<&'a str> {
+        match self {
+            StructItem::BeginNode { name } => {
+                let mut iter = name.split("@");
+                iter.next();
+                Ok(match iter.next() {
+                    Option::Some(addr) => addr,
+                    Option::None => "",
+                })
+            }
+            _ => Err(Error::BadStructItemType),
+        }
+    }
+
     pub fn value(&self) -> Result<&'a [u8]> {
         match self {
             StructItem::Property { name: _, value } => Ok(value),
@@ -286,5 +309,52 @@ mod tests {
             .unwrap(),
             &[1, 2, 3]
         );
+    }
+
+    fn assert_begin_node_accessor<'a>(
+        accessor: fn(item: StructItem<'a>) -> Result<&'a str>,
+        name: &'static str,
+        expected: &'static str,
+    ) {
+        assert_eq!(
+            accessor(StructItem::BeginNode { name: name }).unwrap(),
+            expected
+        );
+        assert_eq!(
+            accessor(StructItem::Property {
+                name: name,
+                value: &[],
+            })
+            .unwrap_err(),
+            Error::BadStructItemType
+        );
+        assert_eq!(
+            accessor(StructItem::EndNode).unwrap_err(),
+            Error::BadStructItemType
+        );
+    }
+
+    #[test]
+    fn test_node_name() {
+        assert_begin_node_accessor(
+            |item| item.node_name(),
+            "node_name@unit_address",
+            "node_name",
+        );
+        assert_begin_node_accessor(
+            |item| item.node_name(),
+            "node_name",
+            "node_name",
+        );
+    }
+
+    #[test]
+    fn test_unit_address() {
+        assert_begin_node_accessor(
+            |item| item.unit_address(),
+            "node_name@unit_address",
+            "unit_address",
+        );
+        assert_begin_node_accessor(|item| item.unit_address(), "node_name", "");
     }
 }
