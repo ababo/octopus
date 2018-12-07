@@ -1,6 +1,6 @@
 use core::str::Utf8Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Error {
     BadMagic,
     BadNodeName,

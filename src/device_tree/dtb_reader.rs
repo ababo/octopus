@@ -138,9 +138,9 @@ impl<'a> DtbStructIterator<'a> {
 
     pub fn find<'b>(&self, path: &'b str) -> DtbStructPathIterator<'a, 'b> {
         DtbStructPathIterator {
+            error: None,
             iter: self.clone(),
-            path_iter: PathSplitIterator::new(path),
-            matched_level: 0,
+            path: PathSplit::new(path),
             level: 0,
         }
     }
@@ -160,47 +160,110 @@ impl<'a> Iterator for DtbStructIterator<'a> {
 impl<'a> FusedIterator for DtbStructIterator<'a> {}
 
 #[derive(Clone, Debug)]
-struct PathSplitIterator<'a> {
+struct PathSplit<'a> {
     path: &'a str,
-    index: isize,
+    comp: &'a str,
+    index: usize,
+    num: usize,
 }
 
-impl<'a> PathSplitIterator<'a> {
-    pub fn new(path: &'a str) -> PathSplitIterator<'a> {
+impl<'a> PathSplit<'a> {
+    pub fn new(path: &'a str) -> PathSplit<'a> {
         let path = if path.ends_with("/") {
             &path[..path.len() - 1]
         } else {
             path
         };
-        PathSplitIterator { path, index: 0 }
+        let mut split = PathSplit {
+            path,
+            comp: "",
+            index: 0,
+            num: path.split("/").count(),
+        };
+        split.update();
+        split
     }
 
-    pub fn is_last(&mut self) -> bool {
-        let result = self.next() == None;
-        self.prev();
-        result
+    fn update(&mut self) {
+        for (i, comp) in self.path.split("/").enumerate() {
+            if i == self.index {
+                self.comp = comp;
+                return;
+            }
+        }
     }
 
-    pub fn next(&mut self) -> Option<&'a str> {
-        None
+    pub fn component(&self) -> &'a str {
+        self.comp
     }
 
-    pub fn prev(&mut self) -> Option<&'a str> {
-        None
+    pub fn level(&self) -> usize {
+        self.index
+    }
+
+    pub fn move_prev(&mut self) -> bool {
+        if self.index > 0 {
+            self.index -= 1;
+            self.update();
+            return true;
+        }
+        false
+    }
+
+    pub fn move_next(&mut self) -> bool {
+        if self.index < self.num - 1 {
+            self.index += 1;
+            self.update();
+            return true;
+        }
+        false
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct DtbStructPathIterator<'a, 'b> {
+    error: Option<Error>,
     iter: DtbStructIterator<'a>,
-    path_iter: PathSplitIterator<'b>,
-    matched_level: usize,
+    path: PathSplit<'b>,
     level: usize,
 }
 
 impl<'a, 'b> DtbStructPathIterator<'a, 'b> {
     pub fn next(&mut self) -> Result<(StructItem<'a>, DtbStructIterator<'a>)> {
-        Err(Error::BadMagic)
+        if self.error != None {
+            return Err(self.error.unwrap());
+        }
+
+        loop {
+            let item = self.iter.next()?;
+            match item {
+                StructItem::BeginNode { name: _ } => {
+                    if self.level == self.path.level()
+                        && self.path.component() == item.node_name().unwrap()
+                        && !self.path.move_next()
+                    {
+                        self.level += 1;
+                        return Ok((item, self.iter.clone()));
+                    }
+                    self.level += 1;
+                }
+                StructItem::Property { name, value: _ } => {
+                    if self.level == self.path.level()
+                        && self.path.component() == name
+                    {
+                        return Ok((item, self.iter.clone()));
+                    }
+                }
+                StructItem::EndNode {} => {
+                    if self.level == self.path.level() && !self.path.move_prev()
+                    {
+                        self.error = Some(Error::UnexpectedEndNode);
+                        return Err(self.error.unwrap());
+                    }
+                    self.level -= 1;
+                }
+            }
+        }
     }
 }
 
@@ -553,47 +616,6 @@ mod tests {
         assert_eq!(iter.next().unwrap_err(), Error::NoMoreStructItems);
     }
 
-    fn test_path_split(path: &str) {
-        let mut iter = PathSplitIterator::new(path);
-
-        let path = if path.ends_with("/") {
-            &path[..path.len() - 1]
-        } else {
-            path
-        };
-
-        for comp in path.split("/") {
-            assert_eq!(iter.next().unwrap(), comp);
-        }
-
-        assert_eq!(iter.next(), None);
-        assert_eq!(iter.next(), None);
-
-        for comp in path.rsplit("/") {
-            assert_eq!(iter.prev().unwrap(), comp);
-        }
-
-        assert_eq!(iter.prev(), None);
-        assert_eq!(iter.prev(), None);
-
-        assert_eq!(iter.next().unwrap(), path.split("/").next().unwrap());
-    }
-
-    #[test]
-    fn test_path_iterator() {
-        test_path_split("");
-        test_path_split("/");
-        test_path_split("//");
-        test_path_split("foo");
-        test_path_split("foo/");
-        test_path_split("/foo");
-        test_path_split("/foo/");
-        test_path_split("foo/bar");
-        test_path_split("foo/bar/");
-        test_path_split("/foo/bar");
-        test_path_split("/foo/bar/");
-    }
-
     #[test]
     fn test_unexpected_end_node() {
         let mut buf = Vec::new();
@@ -608,7 +630,10 @@ mod tests {
 
     fn assert_not_found<'a>(iter: &DtbStructIterator<'a>, path: &str) {
         let mut iter = iter.find(path);
-        assert_eq!(iter.next().unwrap_err(), Error::NoMoreStructItems);
+        let err = iter.next().unwrap_err();
+        assert!(
+            err == Error::NoMoreStructItems || err == Error::UnexpectedEndNode
+        );
     }
 
     fn assert_nodes_found<'a>(
@@ -656,7 +681,7 @@ mod tests {
 
         assert_not_found(&root, "bar");
         assert_not_found(&root, "/bar");
-        assert_properties_found(&root, "/foo/bar", &["1", "2"]);
+        assert_properties_found(&root, "/foo/bar", &["1", "4"]);
         assert_properties_found(&root, "/foo/foo/bar", &["2", "3", "5", "6"]);
 
         let (_, iter) = root.find("/").next().unwrap();
@@ -669,7 +694,6 @@ mod tests {
         assert_nodes_found(&iter2, "foo", &["foo@2", "foo@3"]);
         assert_properties_found(&iter2, "foo/bar", &["2", "3"]);
 
-        let mut iter = root.find("/foo");
         let (_, iter2) = iter.next().unwrap();
         assert_not_found(&iter2, "/foo");
         assert_nodes_found(&iter2, "foo", &["foo@5", "foo@6"]);
