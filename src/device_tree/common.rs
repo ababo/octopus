@@ -20,6 +20,7 @@ pub enum Error {
     OverlappingStruct,
     UnalignedReservedMem,
     UnalignedStruct,
+    UnexpectedEndNode,
     UnexpectedEndOfBlob,
     UnexpectedEndOfStruct,
     UnsupportedCompVersion,
