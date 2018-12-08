@@ -257,7 +257,7 @@ impl<'a, 'b> DtbStructPathIterator<'a, 'b> {
                 StructItem::EndNode {} => {
                     if self.level == self.path.level() && !self.path.move_prev()
                     {
-                        self.error = Some(Error::UnexpectedEndNode);
+                        self.error = Some(Error::OutOfParentNode);
                         return Err(self.error.unwrap());
                     }
                     self.level -= 1;
@@ -617,22 +617,22 @@ mod tests {
     }
 
     #[test]
-    fn test_unexpected_end_node() {
+    fn test_out_of_parent_node() {
         let mut buf = Vec::new();
-        let root = new_reader(&mut buf, "unexpected_end_node")
+        let root = new_reader(&mut buf, "out_of_parent_node")
             .unwrap()
             .struct_iter();
 
         let mut iter = root.find("/foo");
-        assert_eq!(iter.next().unwrap_err(), Error::UnexpectedEndNode);
-        assert_eq!(iter.next().unwrap_err(), Error::UnexpectedEndNode);
+        assert_eq!(iter.next().unwrap_err(), Error::OutOfParentNode);
+        assert_eq!(iter.next().unwrap_err(), Error::OutOfParentNode);
     }
 
     fn assert_not_found<'a>(iter: &DtbStructIterator<'a>, path: &str) {
         let mut iter = iter.find(path);
         let err = iter.next().unwrap_err();
         assert!(
-            err == Error::NoMoreStructItems || err == Error::UnexpectedEndNode
+            err == Error::NoMoreStructItems || err == Error::OutOfParentNode
         );
     }
 
