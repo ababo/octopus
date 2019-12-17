@@ -1,3 +1,10 @@
+# EditorConfig configuration file
+# More information is available at http://editorconfig.org
+#
+# To use this file ensure your editor supports EditorCOnfig natively or via a
+# plugin.
+
+# top-most EditorConfig file
 root = true
 
 [*]

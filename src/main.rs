@@ -1,7 +1,6 @@
 #![cfg_attr(not(test), no_main)]
 #![cfg_attr(not(test), no_std)]
 #![feature(asm)]
-#![feature(const_slice_len)]
 #![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(linkage)]
@@ -19,5 +18,4 @@ mod log;
 mod boot;
 mod config;
 mod detect;
-mod device_tree;
 mod mem;

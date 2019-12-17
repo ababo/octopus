@@ -51,6 +51,6 @@ use log;
 #[no_mangle]
 pub extern "C" fn _boot() -> ! {
     log::init(write_to_serial, log::Level::Debug);
-    log_info!("Hello World!");
+    log_info!("Hello {}", "World!");
     loop {}
 }

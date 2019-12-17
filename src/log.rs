@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
-use core::fmt;
+use core::fmt::{self, Write};
 
 #[derive(PartialEq, PartialOrd)]
 pub enum Level {
@@ -34,15 +34,13 @@ impl fmt::Write for Writer {
     }
 }
 
-// TODO: Support concurrent calls.
-
 pub fn log(level: Level, args: fmt::Arguments) {
     unsafe {
         if level < LEVEL {
             return;
         }
 
-        let writer: &mut fmt::Write = &mut Writer {};
+        let mut writer = Writer {};
         let prefix = match level {
             Level::Debug => "d ",
             Level::Info => "i ",
@@ -51,6 +49,7 @@ pub fn log(level: Level, args: fmt::Arguments) {
             Level::Fatal => "F ",
         };
 
+        // TODO: Support locking.
         writer.write_str(prefix).unwrap();
         writer.write_fmt(args).unwrap();
         writer.write_str("\n").unwrap();

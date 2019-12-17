@@ -33,7 +33,7 @@
 The build produces multiboot-compatible kernel image which can be booted via GRUB. You can also use QEMU emulator to test it:
 
 ```sh
-qemu-system-$ARCH -nographic -kernel target/$TARGET_ARCH-octopus/release/octopus
+qemu-system-$TARGET_ARCH -nographic -kernel target/$TARGET_ARCH-octopus/release/octopus
 ```
 
 ## Blog
