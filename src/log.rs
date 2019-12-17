@@ -2,95 +2,106 @@
 #![allow(unused_macros)]
 use core::fmt::{self, Write};
 
+/// A log level.
 #[derive(PartialEq, PartialOrd)]
 pub enum Level {
-    Debug,
-    Info,
-    Warning,
-    Error,
     Fatal,
+    Error,
+    Warning,
+    Info,
+    Debug,
 }
 
-fn write_nothing(_: &str) {}
+/// An event logger.
+pub struct Logger<'a> {
+    writer: &'a mut dyn Write,
+    max_level: Level,
+}
 
-static mut WRITE: fn(&str) = write_nothing;
-static mut LEVEL: Level = Level::Info;
-
-pub fn init(write: fn(&str), level: Level) {
-    unsafe {
-        WRITE = write;
-        LEVEL = level;
+impl<'a> Logger<'a> {
+    /// Creates a new logger.
+    pub fn new(writer: &'a mut dyn Write, max_level: Level) -> Logger<'a> {
+        Logger { writer, max_level }
     }
-}
 
-struct Writer {}
-
-impl fmt::Write for Writer {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        unsafe {
-            WRITE(s);
-        }
-        Ok(())
-    }
-}
-
-pub fn log(level: Level, args: fmt::Arguments) {
-    unsafe {
-        if level < LEVEL {
+    /// Logs a message built from given format arguments.
+    pub fn log_fmt(&mut self, level: Level, args: fmt::Arguments) {
+        if level > self.max_level {
             return;
         }
 
-        let mut writer = Writer {};
+        // TODO: Support timestamps and locking.
+
         let prefix = match level {
-            Level::Debug => "d ",
-            Level::Info => "i ",
-            Level::Warning => "W ",
-            Level::Error => "E ",
             Level::Fatal => "F ",
+            Level::Error => "E ",
+            Level::Warning => "W ",
+            Level::Info => "i ",
+            Level::Debug => "d ",
         };
 
-        // TODO: Support locking.
-        writer.write_str(prefix).unwrap();
-        writer.write_fmt(args).unwrap();
-        writer.write_str("\n").unwrap();
+        self.writer.write_str(prefix).unwrap();
+        self.writer.write_fmt(args).unwrap();
+        self.writer.write_str("\n").unwrap();
+
+        if level == Level::Fatal {
+            panic!("fatal condition triggered by logger");
+        }
     }
+}
 
-    if level == Level::Fatal {
-        panic!("fatal event logged")
+static mut LOGGER: Option<Logger<'static>> = None;
+
+/// Creates a default logger to be used by the logging macros.
+pub fn init(writer: &'static mut dyn Write, max_level: Level) {
+    unsafe {
+        LOGGER = Some(Logger::new(writer, max_level));
     }
 }
 
-macro_rules! log_debug {
+/// Logs a message using the default logger.
+pub fn log_fmt(level: Level, args: fmt::Arguments) {
+    unsafe {
+        LOGGER.as_mut().unwrap().log_fmt(level, args);
+    }
+}
+
+/// Logs a fatal message and panics.
+macro_rules! fatal {
     ($($arg:tt)*) => ({
         use log;
-        log::log(log::Level::Debug, format_args!($($arg)*));
+        log::log_fmt(log::Level::Fatal, format_args!($($arg)*));
     })
 }
 
-macro_rules! log_info {
+/// Logs an error message.
+macro_rules! error {
     ($($arg:tt)*) => ({
         use log;
-        log::log(log::Level::Info, format_args!($($arg)*));
+        log::log_fmt(log::Level::Error, format_args!($($arg)*));
     })
 }
 
-macro_rules! log_warning {
+/// Logs a warning message.
+macro_rules! warning {
     ($($arg:tt)*) => ({
         use log;
-        log::log(log::Level::Warning, format_args!($($arg)*));
+        log::log_fmt(log::Level::Warning, format_args!($($arg)*));
     })
 }
 
-macro_rules! log_error {
+/// Logs an info message.
+macro_rules! info {
     ($($arg:tt)*) => ({
         use log;
-        log::log(log::Level::Error, format_args!($($arg)*));
+        log::log_fmt(log::Level::Info, format_args!($($arg)*));
     })
 }
 
-macro_rules! log_fatal {
+/// Logs a debug message.
+macro_rules! debug {
     ($($arg:tt)*) => ({
         use log;
-        log::log(log::Level::Fatal, format_args!($($arg)*));
+        log::log_fmt(log::Level::Debug, format_args!($($arg)*));
     })
 }
