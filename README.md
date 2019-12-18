@@ -13,15 +13,21 @@
     - Run `./configure --target $TARGET_ARCH-elf`.
     - Run `make && sudo make install`.
 
-3. Install [Rust nightly](https://doc.rust-lang.org/1.5.0/book/nightly-rust.html).
+3. Install Rust:
 
-4. Run `cargo install cargo-xbuild`.
+    ```sh
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain=nightly
+    ```
+
+4. Run `rustup component add rust-src`.
+
+5. Run `cargo install cargo-xbuild`.
 
 ### Build
 
 1. Cd to the project directory.
 
-2. Run `cargo xbuild --target $TARGET_ARCH-elf.json`.
+2. Run `cargo xbuild --target src/arch/$TARGET_ARCH/$TARGET_ARCH-elf.json --release`.
 
 ## Run
 
