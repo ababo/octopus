@@ -4,18 +4,37 @@
 #![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(linkage)]
+#![feature(untagged_unions)]
 
 #[cfg(test)]
 extern crate core;
 
-#[cfg(not(test))]
-#[cfg(target_arch = "x86_64")]
-global_asm!(include_str!("start_x86_64.s"));
-
 #[macro_use]
 mod log;
+
 #[cfg(not(test))]
-mod boot;
-mod config;
-mod detect;
-mod mem;
+mod arch;
+
+use arch::start::halt;
+use core::panic::PanicInfo;
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    halt();
+}
+
+#[lang = "eh_personality"]
+#[no_mangle]
+pub extern "C" fn eh_personality() {
+    halt();
+}
+
+#[no_mangle]
+pub extern "C" fn _Unwind_Resume() {
+    halt();
+}
+
+fn main() -> ! {
+    info!("Hello {}", "World!");
+    halt();
+}

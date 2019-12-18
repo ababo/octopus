@@ -1,12 +1,12 @@
 OUTPUT_FORMAT(elf32-i386)
 
-ENTRY(_start)
+ENTRY(boot_mb)
 
 SECTIONS {
     . = 0x500;
 
-    .header : {
-        *(.header);
+    .mb_header : {
+        *(.mb_header);
     }
 
     .text : {
