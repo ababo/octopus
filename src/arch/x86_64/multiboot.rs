@@ -30,15 +30,6 @@ pub struct Header {
 /// A multiboot bootloader magic (must be stored in %eax).
 pub const BOOTLOADER_MAGIC: u32 = 0x2BADB002;
 
-/// A symbol table for a.out.
-#[repr(C)]
-pub struct AoutSymbolTable {
-    pub tab_size: u32,
-    pub str_size: u32,
-    pub addr: u32,
-    pub reserved: u32,
-}
-
 /// A section header table for ELF.
 #[repr(C)]
 pub struct ElfSectionHeaderTable {
@@ -46,13 +37,6 @@ pub struct ElfSectionHeaderTable {
     pub size: u32,
     pub addr: u32,
     pub shndx: u32,
-}
-
-/// A binary content table.
-#[repr(C)]
-pub union BinaryContentTable {
-    aout_sym: AoutSymbolTable,
-    elf_sec: ElfSectionHeaderTable,
 }
 
 /// A multiboot info.
@@ -75,8 +59,8 @@ pub struct Info {
     pub mods_count: u32,
     pub mods_addr: u32,
 
-    // Binary content.
-    pub content: BinaryContentTable,
+    // ELF sections.
+    pub elf_sec: ElfSectionHeaderTable,
 
     // Memory Mapping buffer.
     pub mmap_length: u32,

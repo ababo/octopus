@@ -43,8 +43,7 @@ impl __Logger {
         // TODO: Unlock.
 
         if level == Level::Fatal {
-            // TODO: Replace panic machinery to avoid binary bloat.
-            // panic!("a fatal event is encountered by the logger");
+            panic!("a fatal event has been logged above");
         }
     }
 }

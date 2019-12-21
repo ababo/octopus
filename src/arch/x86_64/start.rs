@@ -21,13 +21,3 @@ static MB_HEADER: mb::Header = mb::Header {
 
 #[cfg(not(test))]
 global_asm!(include_str!("start.s"));
-
-/// Halts the CPU.
-#[no_mangle]
-pub extern "C" fn halt() -> ! {
-    loop {
-        unsafe {
-            asm!("hlt");
-        }
-    }
-}
