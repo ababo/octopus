@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
-use core::fmt::{self, Write};
+
+use ufmt::uWrite;
 
 /// A log level.
 #[derive(PartialEq, PartialOrd)]
@@ -12,25 +13,19 @@ pub enum Level {
     Debug,
 }
 
-/// An event logger.
-pub struct Logger<'a> {
-    writer: &'a mut dyn Write,
+#[doc(hidden)]
+pub struct __Logger {
+    write_str: fn(&str),
     max_level: Level,
 }
 
-impl<'a> Logger<'a> {
-    /// Creates a new logger.
-    pub fn new(writer: &'a mut dyn Write, max_level: Level) -> Logger<'a> {
-        Logger { writer, max_level }
-    }
-
-    /// Logs a message built from given format arguments.
-    pub fn log_fmt(&mut self, level: Level, args: fmt::Arguments) {
+impl __Logger {
+    pub fn pre_log(&mut self, level: Level) -> bool {
         if level > self.max_level {
-            return;
+            return false;
         }
 
-        // TODO: Support timestamps and locking.
+        // TODO: Lock and write timestamp.
 
         let prefix = match level {
             Level::Fatal => "F ",
@@ -40,68 +35,95 @@ impl<'a> Logger<'a> {
             Level::Debug => "d ",
         };
 
-        self.writer.write_str(prefix).unwrap();
-        self.writer.write_fmt(args).unwrap();
-        self.writer.write_str("\n").unwrap();
+        (self.write_str)(prefix);
+        true
+    }
+
+    pub fn post_log(&mut self, level: Level) {
+        // TODO: Unlock.
 
         if level == Level::Fatal {
-            panic!("fatal condition triggered by logger");
+            // TODO: Replace panic machinery to avoid binary bloat.
+            // panic!("a fatal event is encountered by the logger");
         }
     }
 }
 
-static mut LOGGER: Option<Logger<'static>> = None;
+impl uWrite for __Logger {
+    type Error = ();
 
-/// Creates a default logger to be used by the logging macros.
-pub fn init(writer: &'static mut dyn Write, max_level: Level) {
-    unsafe {
-        LOGGER = Some(Logger::new(writer, max_level));
+    fn write_str(&mut self, s: &str) -> Result<(), Self::Error> {
+        (self.write_str)(s);
+        Ok(())
     }
 }
 
-/// Logs a message using the default logger.
-pub fn log_fmt(level: Level, args: fmt::Arguments) {
+fn write_nothing(_s: &str) {}
+
+#[doc(hidden)]
+pub static mut __LOGGER: __Logger = __Logger {
+    write_str: write_nothing,
+    max_level: Level::Fatal,
+};
+
+/// Initializes kernel logging.
+pub fn init(write_str: fn(&str), max_level: Level) {
     unsafe {
-        LOGGER.as_mut().unwrap().log_fmt(level, args);
+        __LOGGER = __Logger {
+            write_str,
+            max_level,
+        };
     }
+}
+
+macro_rules! log {
+    ($level:expr, $($arg:tt)*) => {
+        let logger = unsafe { &mut $crate::log::__LOGGER } ;
+        if logger.pre_log($level) {
+            let _ = uwriteln!(logger, $($arg)*);
+            logger.post_log($level);
+        }
+    };
 }
 
 /// Logs a fatal message and panics.
 macro_rules! fatal {
     ($($arg:tt)*) => ({
-        use log;
-        log::log_fmt(log::Level::Fatal, format_args!($($arg)*));
+        log!($crate::log::Level::Fatal, $($arg)*);
     })
 }
 
 /// Logs an error message.
 macro_rules! error {
     ($($arg:tt)*) => ({
-        use log;
-        log::log_fmt(log::Level::Error, format_args!($($arg)*));
+        log!($crate::log::Level::Error, $($arg)*);
     })
 }
 
 /// Logs a warning message.
 macro_rules! warning {
     ($($arg:tt)*) => ({
-        use log;
-        log::log_fmt(log::Level::Warning, format_args!($($arg)*));
+        log!($crate::log::Level::Warning, $($arg)*);
     })
 }
 
 /// Logs an info message.
 macro_rules! info {
     ($($arg:tt)*) => ({
-        use log;
-        log::log_fmt(log::Level::Info, format_args!($($arg)*));
+        log!($crate::log::Level::Info, $($arg)*);
     })
 }
 
 /// Logs a debug message.
+#[cfg(build = "debug")]
 macro_rules! debug {
     ($($arg:tt)*) => ({
-        use log;
-        log::log_fmt(log::Level::Debug, format_args!($($arg)*));
+        log!($crate::log::Level::Debug, $($arg)*);
     })
+}
+
+/// Logs a debug message.
+#[cfg(build = "release")]
+macro_rules! debug {
+    ($($arg:tt)*) => {};
 }

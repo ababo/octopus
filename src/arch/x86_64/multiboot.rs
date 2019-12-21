@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 /// The multiboot header magic value.
 pub const HEADER_MAGIC: u32 = 0x1BADB002;
 

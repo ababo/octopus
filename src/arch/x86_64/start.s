@@ -26,6 +26,13 @@
     .set STACK_SIZE, 8 * 1024
 
     .bss
+    .global mb_magic
+mb_magic:
+    .long 0
+    .global mb_info
+mb_info:
+    .long 0
+
     .align 4096
 pml4:
     .fill 512, 8
@@ -52,11 +59,11 @@ gdti:
 
     .text
     .code32
-    .global boot_mb
-boot_mb:
+    .global _start
+_start:
     /* Preserve magic and multiboot_info. */
-    movl %eax, %edi
-    movl %ebx, %esi
+    movl %eax, mb_magic
+    movl %ebx, mb_info
 
     /* Disable IRQs. */
     movb $0xFF, %al
@@ -102,11 +109,5 @@ start64:
     movw %ax, %ss
     movq $(stack + STACK_SIZE), %rsp
 
-    /* Extend preserved magic and multiboot_info. */
-    shlq $32, %rdi
-    shrq $32, %rdi
-    shlq $32, %rsi
-    shrq $32, %rsi
-
     /* Call the Rust entry point. */
-    call start_mb
+    call main

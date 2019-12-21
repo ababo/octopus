@@ -10,11 +10,15 @@
 extern crate core;
 
 #[macro_use]
+extern crate ufmt;
+
+#[macro_use]
 mod log;
 
 #[cfg(not(test))]
 mod arch;
 
+use arch::serial;
 use arch::start::halt;
 use core::panic::PanicInfo;
 
@@ -34,7 +38,12 @@ pub extern "C" fn _Unwind_Resume() {
     halt();
 }
 
-fn main() -> ! {
+#[no_mangle]
+extern "C" fn main() -> ! {
+    serial::init();
+    log::init(serial::write_str, log::Level::Debug);
+
     info!("Hello {}", "World!");
+
     halt();
 }

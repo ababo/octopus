@@ -1,6 +1,6 @@
 OUTPUT_FORMAT(elf32-i386)
 
-ENTRY(boot_mb)
+ENTRY(_start)
 
 SECTIONS {
     . = 0x500;
