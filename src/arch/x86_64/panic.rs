@@ -1,4 +1,4 @@
-use super::serial;
+use super::uart;
 use core::panic::PanicInfo;
 use ufmt::uWrite;
 
@@ -24,11 +24,11 @@ pub struct __PanicHandler;
 
 impl __PanicHandler {
     pub fn pre_panic(&mut self) {
-        serial::write_str("kernel panic: ");
+        uart::write_str("kernel panic: ");
     }
 
     pub fn post_panic(&mut self) -> ! {
-        serial::write_str("\n");
+        uart::write_str("\n");
         halt();
     }
 }
@@ -37,7 +37,7 @@ impl uWrite for __PanicHandler {
     type Error = ();
 
     fn write_str(&mut self, s: &str) -> Result<(), ()> {
-        serial::write_str(s);
+        uart::write_str(s);
         Ok(())
     }
 }

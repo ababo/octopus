@@ -20,12 +20,12 @@ mod log;
 mod arch;
 
 use arch::panic::halt;
-use arch::serial;
+use arch::uart;
 
 #[no_mangle]
 extern "C" fn main() -> ! {
-    serial::init();
-    log::init(serial::write_str, log::Level::Debug);
+    uart::init();
+    log::init(uart::write_str, log::Level::Debug);
 
     fatal!("Hello {}", "World!");
 
