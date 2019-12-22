@@ -31,13 +31,9 @@
 
 ## Run
 
-The build produces multiboot-compatible kernel image which can be booted by GRUB.
+To boot the kernel image on QEMU emulator run: `src/arch/$TARGET_ARCH/run-qemu.sh`.
 
-You can also use QEMU emulator to test it:
-
-```sh
-qemu-system-$TARGET_ARCH -nographic -kernel target/$TARGET_ARCH-elf/release/octopus
-```
+**Note**: For `x86_64` the kernel image complies with the multiboot specification and can be booted by GRUB. Kernel output will be passed through COM1-port.
 
 ## Blog
 

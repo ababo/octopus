@@ -1,18 +1,18 @@
 {
-    "arch": "x86_64",
-    "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+    "arch": "aarch64",
+    "data-layout": "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128",
     "disable-redzone": true,
     "executables": true,
-    "features": "-mmx,-sse,+soft-float",
-    "linker": "x86_64-elf-ld",
+    "features": "+a53,+strict-align",
+    "linker": "aarch64-elf-ld",
     "linker-flavor": "ld",
-    "llvm-target": "x86_64-elf",
+    "llvm-target": "aarch64-elf",
     "os": "none",
     "panic-strategy": "abort",
     "pre-link-args": {
         "ld": [
             "-zmax-page-size=1",
-            "--script=src/arch/x86_64/kernel.lds"
+            "--script=src/arch/aarch64/kernel.lds"
         ]
     },
     "relocation-model": "static",
