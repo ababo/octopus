@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(all(not(test), not(doc)), no_main)]
 #![cfg_attr(not(test), no_std)]
 #![feature(asm)]
 #![feature(global_asm)]
