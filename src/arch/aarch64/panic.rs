@@ -7,7 +7,7 @@ use ufmt::uWrite;
 pub extern "C" fn halt() -> ! {
     loop {
         unsafe {
-            asm!("wfi");
+            llvm_asm!("wfi");
         }
     }
 }
