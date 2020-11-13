@@ -4,15 +4,15 @@
     "disable-redzone": true,
     "executables": true,
     "features": "-mmx,-sse,+soft-float",
-    "linker": "x86_64-elf-ld",
+    "linker": "$HOST_LINKER",
     "linker-flavor": "ld",
-    "llvm-target": "x86_64-elf",
+    "llvm-target": "x86_64-unknown-none",
     "os": "none",
     "panic-strategy": "abort",
     "pre-link-args": {
         "ld": [
             "-zmax-page-size=1",
-            "--script=src/arch/x86_64/kernel.lds"
+            "--script=src/arch/x86_64/$TARGET_PLATFORM.ld"
         ]
     },
     "relocation-model": "static",

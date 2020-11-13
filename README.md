@@ -1,39 +1,18 @@
 # Octopus Operating System
 
+## Build
 
-## How to build
+1. Install [Docker](https://docs.docker.com/get-docker/) (with [Docker Compose](https://docs.docker.com/compose/install/)).
 
-### Prerequisites
+2. Cd to the project directory.
 
-1. Set `TARGET_ARCH` environment variable for the target architecture (can be
-`x86_64` or `aarch64`).
+3. Set `TARGER_ARCH` environment variable to `aarch64` or `x86_64`.
 
-2. Install GNU binary utilities:
-    - Download the latest [source code](http://ftp.gnu.org/gnu/binutils/).
-    - Run `./configure --target $TARGET_ARCH-elf`.
-    - Run `make && sudo make install`.
+4. Run `docker-compose --env-file docker/$TARGER_ARCH.env run dev build.sh`.
 
-3. Install Rust:
+## Run in QEMU
 
-    ```sh
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain=nightly
-    ```
-
-4. Run `rustup component add rust-src`.
-
-5. Run `cargo install cargo-xbuild`.
-
-### Build
-
-1. Cd to the project directory.
-
-2. Run `cargo xbuild --target src/arch/$TARGET_ARCH/$TARGET_ARCH-elf.json --release`.
-
-## Run
-
-To boot the kernel image on QEMU emulator run: `src/arch/$TARGET_ARCH/run-qemu.sh`.
-
-**Note**: For `x86_64` the kernel image complies with the multiboot specification and can be booted by GRUB. Kernel output will be passed through COM1-port.
+1. Run `docker-compose --env-file docker/$TARGER_ARCH.env run dev run.sh`.
 
 ## Blog
 

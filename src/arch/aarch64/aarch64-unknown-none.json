@@ -4,15 +4,15 @@
     "disable-redzone": true,
     "executables": true,
     "features": "+a53,+strict-align",
-    "linker": "aarch64-elf-ld",
+    "linker": "$HOST_LINKER",
     "linker-flavor": "ld",
-    "llvm-target": "aarch64-elf",
+    "llvm-target": "aarch64-unknown-none",
     "os": "none",
     "panic-strategy": "abort",
     "pre-link-args": {
         "ld": [
             "-zmax-page-size=1",
-            "--script=src/arch/aarch64/kernel.lds"
+            "--script=src/arch/aarch64/$TARGET_PLATFORM.ld"
         ]
     },
     "relocation-model": "static",

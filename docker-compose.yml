@@ -1,0 +1,17 @@
+version: '3'
+services:
+  dev:
+    build:
+      args:
+        - PROJECT_PATH=$PROJECT_PATH
+      context: ./docker
+      dockerfile: dev.Dockerfile
+    environment:
+      - HOST_LINKER=$HOST_LINKER
+      - PROJECT_PATH=$PROJECT_PATH
+      - TARGET_ARCH=$TARGET_ARCH
+      - TARGET_CPU=$TARGET_CPU
+      - TARGET_PLATFORM=$TARGET_PLATFORM
+    image: yot_dev
+    volumes:
+      - .:$PROJECT_PATH
